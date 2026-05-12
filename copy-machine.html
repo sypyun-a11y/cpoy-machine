@@ -1,0 +1,749 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>카피 자판기 — AI 파운더스</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --bg: #0f0f13;
+    --card: #1a1a22;
+    --card2: #22222e;
+    --border: #2e2e3e;
+    --accent: #7c6bff;
+    --accent2: #ff6b9d;
+    --accent3: #6bffd8;
+    --accent4: #ffcc6b;
+    --text: #f0f0f6;
+    --muted: #888899;
+  }
+  body { background: var(--bg); color: var(--text); font-family: 'Pretendard','Apple SD Gothic Neo',sans-serif; min-height: 100vh; }
+
+  .header { text-align: center; padding: 60px 20px 40px; }
+  .header-badge { display: inline-block; background: linear-gradient(135deg,var(--accent),var(--accent2)); color: #fff; font-size: 11px; font-weight: 700; letter-spacing: 2px; padding: 5px 14px; border-radius: 20px; margin-bottom: 20px; }
+  .header h1 { font-size: 40px; font-weight: 800; line-height: 1.2; margin-bottom: 12px; }
+  .header h1 span { background: linear-gradient(135deg,var(--accent),var(--accent2)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+  .header p { color: var(--muted); font-size: 16px; line-height: 1.6; }
+
+  .machine-wrap { max-width: 800px; margin: 0 auto; padding: 0 20px 80px; }
+
+  .step-label { font-size: 11px; font-weight: 700; letter-spacing: 1.5px; color: var(--accent); text-transform: uppercase; margin-bottom: 8px; }
+  .step-title { font-size: 17px; font-weight: 700; margin-bottom: 14px; }
+  .step-sub { font-size: 13px; color: var(--muted); margin-bottom: 14px; margin-top: -8px; }
+
+  .options { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 28px; }
+  .opt { background: var(--card); border: 1.5px solid var(--border); color: var(--muted); padding: 9px 15px; border-radius: 8px; font-size: 13px; font-weight: 500; cursor: pointer; transition: all .18s; user-select: none; }
+  .opt:hover { border-color: var(--accent); color: var(--text); }
+  .opt.selected { background: linear-gradient(135deg,rgba(124,107,255,.18),rgba(255,107,157,.1)); border-color: var(--accent); color: var(--text); }
+  .opt .opt-emoji { margin-right: 5px; }
+
+  .divider { border: none; border-top: 1px solid var(--border); margin: 4px 0 28px; }
+
+  .input-wrap { margin-bottom: 28px; }
+  .input-wrap input, .input-wrap textarea {
+    width: 100%; background: var(--card); border: 1.5px solid var(--border); border-radius: 10px;
+    padding: 13px 16px; color: var(--text); font-size: 14px; outline: none; transition: border-color .18s;
+    font-family: inherit; resize: vertical;
+  }
+  .input-wrap input::placeholder, .input-wrap textarea::placeholder { color: var(--muted); }
+  .input-wrap input:focus, .input-wrap textarea:focus { border-color: var(--accent); }
+
+  .generate-btn {
+    width: 100%; background: linear-gradient(135deg,var(--accent),var(--accent2));
+    color: #fff; border: none; border-radius: 12px; padding: 18px;
+    font-size: 17px; font-weight: 700; cursor: pointer; transition: opacity .2s, transform .1s; margin-bottom: 36px;
+  }
+  .generate-btn:hover { opacity: .88; }
+  .generate-btn:active { transform: scale(.98); }
+  .generate-btn:disabled { opacity: .35; cursor: not-allowed; }
+
+  /* RESULT */
+  .result-section { display: none; }
+  .result-section.visible { display: block; }
+
+  .result-header { margin-bottom: 24px; }
+  .result-header h2 { font-size: 22px; font-weight: 800; margin-bottom: 6px; }
+  .result-header p { color: var(--muted); font-size: 13px; }
+
+  /* 용도 탭 */
+  .usage-tabs { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 24px; }
+  .usage-tab {
+    background: var(--card2); border: 1.5px solid var(--border); color: var(--muted);
+    padding: 7px 14px; border-radius: 20px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all .18s;
+  }
+  .usage-tab.active { border-color: var(--accent3); color: var(--accent3); background: rgba(107,255,216,.08); }
+
+  /* 카피 블록 */
+  .copy-block { display: none; }
+  .copy-block.visible { display: block; }
+
+  .copy-card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 14px;
+    padding: 20px 22px; margin-bottom: 12px; position: relative;
+  }
+  .copy-card-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; gap: 10px; }
+  .copy-card-meta { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .card-label { font-size: 11px; font-weight: 700; letter-spacing: 1.2px; color: var(--accent); text-transform: uppercase; }
+  .usage-badge {
+    font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 10px; letter-spacing: .5px;
+  }
+  .usage-landing  { background: rgba(124,107,255,.15); color: #a89fff; }
+  .usage-sns      { background: rgba(255,107,157,.15); color: #ff9ec0; }
+  .usage-blog     { background: rgba(107,255,216,.15); color: #6bffd8; }
+  .usage-poster   { background: rgba(255,204,107,.15); color: #ffcc6b; }
+  .usage-ad       { background: rgba(255,150,80,.15); color: #ffb07c; }
+
+  .copy-text { font-size: 15px; line-height: 1.75; color: var(--text); }
+  .copy-text.hook-text { font-size: 19px; font-weight: 700; line-height: 1.45; }
+  .copy-text.small { font-size: 13px; color: var(--muted); margin-top: 4px; }
+
+  .copy-btn {
+    background: transparent; border: 1px solid var(--border); color: var(--muted);
+    font-size: 11px; padding: 5px 11px; border-radius: 6px; cursor: pointer;
+    transition: all .15s; white-space: nowrap; flex-shrink: 0;
+  }
+  .copy-btn:hover { border-color: var(--accent3); color: var(--accent3); }
+  .copy-btn.copied { border-color: var(--accent3); color: var(--accent3); }
+
+  .section-list { list-style: none; }
+  .section-list li { padding: 11px 0; border-bottom: 1px solid var(--border); display: flex; gap: 10px; align-items: flex-start; }
+  .section-list li:last-child { border-bottom: none; }
+  .section-tag { background: var(--card2); color: var(--accent); font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 5px; white-space: nowrap; flex-shrink: 0; margin-top: 3px; }
+  .section-copy { font-size: 14px; line-height: 1.65; flex: 1; }
+  .section-where { font-size: 11px; color: var(--muted); margin-top: 3px; }
+
+  .cta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .cta-item { background: var(--card2); border-radius: 8px; padding: 12px 14px; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .cta-item-text { font-size: 14px; font-weight: 600; }
+  .cta-item-where { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+  .copy-all-btn {
+    width: 100%; background: var(--card); border: 1.5px solid var(--accent3); color: var(--accent3);
+    border-radius: 10px; padding: 14px; font-size: 15px; font-weight: 700; cursor: pointer; margin-top: 8px; margin-bottom: 12px; transition: all .18s;
+  }
+  .copy-all-btn:hover { background: rgba(107,255,216,.07); }
+
+  .hint { background: rgba(124,107,255,.07); border: 1px solid rgba(124,107,255,.2); border-radius: 10px; padding: 16px 18px; font-size: 13px; color: var(--muted); line-height: 1.75; margin-top: 4px; }
+  .hint strong { color: var(--accent); }
+
+  .reset-btn { width: 100%; background: transparent; border: 1px solid var(--border); color: var(--muted); border-radius: 10px; padding: 13px; font-size: 14px; cursor: pointer; margin-top: 10px; transition: all .18s; }
+  .reset-btn:hover { border-color: var(--text); color: var(--text); }
+
+  .toast { position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%) translateY(20px); background: var(--accent3); color: #000; font-weight: 700; font-size: 14px; padding: 12px 24px; border-radius: 30px; opacity: 0; transition: all .25s; pointer-events: none; z-index: 999; }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  @media (max-width: 500px) { .cta-grid { grid-template-columns: 1fr; } .header h1 { font-size: 30px; } }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-badge">✦ AI 파운더스 2주차</div>
+  <h1>카피 <span>자판기</span></h1>
+  <p>4가지만 고르면 랜딩페이지·SNS·블로그·포스터<br>카피가 한 번에 뽑혀요.</p>
+</div>
+
+<div class="machine-wrap">
+
+  <!-- STEP 1: BM -->
+  <div class="step-label">Step 01</div>
+  <div class="step-title">어떤 BM인가요?</div>
+  <div class="options" id="bm-opts">
+    <div class="opt" data-val="subscription"><span class="opt-emoji">🔄</span>구독형</div>
+    <div class="opt" data-val="onetime"><span class="opt-emoji">🛒</span>단건결제</div>
+    <div class="opt" data-val="community"><span class="opt-emoji">👥</span>유료 커뮤니티</div>
+    <div class="opt" data-val="marketplace"><span class="opt-emoji">🏪</span>마켓플레이스</div>
+    <div class="opt" data-val="saas"><span class="opt-emoji">⚙️</span>SaaS</div>
+    <div class="opt" data-val="freemium"><span class="opt-emoji">🎁</span>프리미엄(Freemium)</div>
+    <div class="opt" data-val="content"><span class="opt-emoji">📚</span>콘텐츠 판매</div>
+    <div class="opt" data-val="b2b"><span class="opt-emoji">🤝</span>B2B 솔루션</div>
+  </div>
+  <hr class="divider">
+
+  <!-- STEP 2: 타겟 -->
+  <div class="step-label">Step 02</div>
+  <div class="step-title">주요 타겟이 누구인가요?</div>
+  <div class="options" id="target-opts">
+    <div class="opt" data-val="worker"><span class="opt-emoji">💼</span>직장인</div>
+    <div class="opt" data-val="freelancer"><span class="opt-emoji">💻</span>프리랜서 / 1인 사업자</div>
+    <div class="opt" data-val="startup"><span class="opt-emoji">🚀</span>스타트업 / 창업자</div>
+    <div class="opt" data-val="student"><span class="opt-emoji">🎓</span>대학생 / 취준생</div>
+    <div class="opt" data-val="mom"><span class="opt-emoji">👶</span>육아 / 주부</div>
+    <div class="opt" data-val="small-biz"><span class="opt-emoji">🏬</span>소상공인</div>
+    <div class="opt" data-val="creator"><span class="opt-emoji">🎨</span>크리에이터 / 인플루언서</div>
+    <div class="opt" data-val="expert"><span class="opt-emoji">🎯</span>전문직 (의사·변호사·강사 등)</div>
+  </div>
+  <hr class="divider">
+
+  <!-- STEP 3: 카테고리 -->
+  <div class="step-label">Step 03</div>
+  <div class="step-title">서비스 카테고리는요?</div>
+  <div class="options" id="cat-opts">
+    <div class="opt" data-val="productivity"><span class="opt-emoji">⚡</span>생산성 / 업무 자동화</div>
+    <div class="opt" data-val="education"><span class="opt-emoji">📖</span>교육 / 강의</div>
+    <div class="opt" data-val="finance"><span class="opt-emoji">💰</span>재테크 / 금융</div>
+    <div class="opt" data-val="health"><span class="opt-emoji">💪</span>건강 / 피트니스</div>
+    <div class="opt" data-val="marketing"><span class="opt-emoji">📣</span>마케팅 / 콘텐츠</div>
+    <div class="opt" data-val="hr"><span class="opt-emoji">🧑‍💼</span>채용 / HR</div>
+    <div class="opt" data-val="community-cat"><span class="opt-emoji">🌐</span>커뮤니티 / 네트워킹</div>
+    <div class="opt" data-val="commerce"><span class="opt-emoji">🛍️</span>커머스 / 쇼핑</div>
+  </div>
+  <hr class="divider">
+
+  <!-- STEP 4: 강조 포인트 -->
+  <div class="step-label">Step 04</div>
+  <div class="step-title">가장 강조하고 싶은 포인트는요?</div>
+  <div class="step-sub">내 서비스의 핵심 설득 포인트를 선택하세요. (복수 선택 가능)</div>
+  <div class="options" id="point-opts">
+    <div class="opt multi" data-val="price"><span class="opt-emoji">💸</span>합리적인 가격</div>
+    <div class="opt multi" data-val="speed"><span class="opt-emoji">⚡</span>빠른 결과</div>
+    <div class="opt multi" data-val="easy"><span class="opt-emoji">😊</span>쉽고 간단함</div>
+    <div class="opt multi" data-val="result"><span class="opt-emoji">📈</span>검증된 성과/결과</div>
+    <div class="opt multi" data-val="community-point"><span class="opt-emoji">🤝</span>함께하는 커뮤니티</div>
+    <div class="opt multi" data-val="exclusive"><span class="opt-emoji">✨</span>희소성 / 한정</div>
+    <div class="opt multi" data-val="safe"><span class="opt-emoji">🛡️</span>안전 / 신뢰</div>
+    <div class="opt multi" data-val="custom"><span class="opt-emoji">🎯</span>나에게 맞춤화</div>
+    <div class="opt multi" data-val="time"><span class="opt-emoji">⏰</span>시간 절약</div>
+    <div class="opt multi" data-val="free"><span class="opt-emoji">🆓</span>무료로 시작</div>
+  </div>
+  <hr class="divider">
+
+  <!-- STEP 5: 서비스명 + 한줄소개 -->
+  <div class="step-label">Step 05</div>
+  <div class="step-title">서비스 이름 & 한 줄 소개 <span style="color:var(--muted);font-weight:400;font-size:13px">(선택)</span></div>
+  <div class="input-wrap" style="margin-bottom:12px">
+    <input type="text" id="service-name" placeholder="서비스 이름 예: 루틴AI, 클로드메이트, 스터디핏">
+  </div>
+  <div class="input-wrap">
+    <textarea id="service-desc" rows="2" placeholder="한 줄 소개 예: AI로 반복 업무를 자동화해주는 서비스"></textarea>
+  </div>
+
+  <button class="generate-btn" id="gen-btn" disabled>🎰 카피 뽑기</button>
+
+  <!-- ── RESULT ── -->
+  <div class="result-section" id="result-sec">
+
+    <div class="result-header">
+      <h2>✦ 뽑힌 카피</h2>
+      <p>용도 탭을 눌러 원하는 카피만 골라 복사하세요.</p>
+    </div>
+
+    <!-- 용도 필터 탭 -->
+    <div class="usage-tabs">
+      <div class="usage-tab active" data-filter="all">전체 보기</div>
+      <div class="usage-tab" data-filter="landing">🖥 랜딩페이지</div>
+      <div class="usage-tab" data-filter="sns">📱 SNS / 카드뉴스</div>
+      <div class="usage-tab" data-filter="blog">✍️ 블로그</div>
+      <div class="usage-tab" data-filter="poster">🪧 포스터 / 배너</div>
+      <div class="usage-tab" data-filter="ad">📣 광고 소재</div>
+    </div>
+
+    <!-- 섹션 A: 후킹 문구 -->
+    <div class="copy-card" data-usage="landing sns poster ad">
+      <div class="copy-card-top">
+        <div class="copy-card-meta">
+          <span class="card-label">🎯 후킹 문구</span>
+          <span class="usage-badge usage-landing">랜딩페이지 Hero</span>
+          <span class="usage-badge usage-sns">SNS 첫 줄</span>
+          <span class="usage-badge usage-poster">포스터 헤드라인</span>
+          <span class="usage-badge usage-ad">광고 헤드라인</span>
+        </div>
+      </div>
+      <div id="hooks-output"></div>
+    </div>
+
+    <!-- 섹션 B: 랜딩페이지 섹션별 카피 -->
+    <div class="copy-card" data-usage="landing blog">
+      <div class="copy-card-top">
+        <div class="copy-card-meta">
+          <span class="card-label">📄 랜딩페이지 섹션별</span>
+          <span class="usage-badge usage-landing">랜딩페이지 본문</span>
+          <span class="usage-badge usage-blog">블로그 구조</span>
+        </div>
+      </div>
+      <ul class="section-list" id="sections-output"></ul>
+    </div>
+
+    <!-- 섹션 C: 강조 포인트 카피 -->
+    <div class="copy-card" data-usage="landing sns poster ad blog">
+      <div class="copy-card-top">
+        <div class="copy-card-meta">
+          <span class="card-label">✨ 강조 포인트 카피</span>
+          <span class="usage-badge usage-landing">랜딩 서브카피</span>
+          <span class="usage-badge usage-sns">SNS 캡션</span>
+          <span class="usage-badge usage-ad">광고 본문</span>
+        </div>
+      </div>
+      <div id="points-output"></div>
+    </div>
+
+    <!-- 섹션 D: SNS 캡션 -->
+    <div class="copy-card" data-usage="sns">
+      <div class="copy-card-top">
+        <div class="copy-card-meta">
+          <span class="card-label">📱 SNS 캡션 (인스타·링크드인)</span>
+          <span class="usage-badge usage-sns">인스타그램</span>
+          <span class="usage-badge usage-sns">링크드인</span>
+        </div>
+      </div>
+      <div id="sns-output"></div>
+    </div>
+
+    <!-- 섹션 E: 블로그 도입부 -->
+    <div class="copy-card" data-usage="blog">
+      <div class="copy-card-top">
+        <div class="copy-card-meta">
+          <span class="card-label">✍️ 블로그 도입부</span>
+          <span class="usage-badge usage-blog">블로그 / 브런치</span>
+        </div>
+      </div>
+      <div id="blog-output"></div>
+    </div>
+
+    <!-- 섹션 F: CTA -->
+    <div class="copy-card" data-usage="landing sns poster ad">
+      <div class="copy-card-top">
+        <div class="copy-card-meta">
+          <span class="card-label">🔴 CTA 버튼 문구</span>
+          <span class="usage-badge usage-landing">랜딩 버튼</span>
+          <span class="usage-badge usage-sns">SNS 링크</span>
+          <span class="usage-badge usage-poster">포스터 하단</span>
+          <span class="usage-badge usage-ad">광고 CTA</span>
+        </div>
+      </div>
+      <div class="cta-grid" id="cta-output"></div>
+    </div>
+
+    <button class="copy-all-btn" id="copy-all-btn">📋 전체 카피 복사하기</button>
+
+    <div class="hint">
+      <strong>👉 다음 단계</strong><br>
+      복사한 카피를 Claude 채팅창에 붙여넣고 <strong>"[서비스명]에 맞게 더 구체적으로 다듬어줘"</strong>라고 하면 완성도가 훨씬 올라가요.<br>
+      랜딩페이지 배치 순서: <strong>후킹 → 문제 → 해결 → 증거 → 강조포인트 → CTA</strong>
+    </div>
+
+    <button class="reset-btn" id="reset-btn">↺ 다시 뽑기</button>
+  </div>
+</div>
+
+<div class="toast" id="toast">복사됐어요!</div>
+
+<script>
+// ─────────────────────────────────────────────
+// DATA
+// ─────────────────────────────────────────────
+const HOOKS = {
+  subscription: {
+    worker:     ["매달 커피값으로 {n}을 구독하고, 하루 2시간을 돌려받으세요.","퇴근 후 30분, {n}이 나머지를 해결합니다.","월 9,900원짜리 루틴이 연봉을 바꿉니다."],
+    freelancer: ["프리랜서의 가장 큰 문제? 시간이 돈인데 시간이 없다는 것.","클라이언트 10명을 혼자 관리하는 법.","{n} 구독 하나로 외주 수입 30% 올린 사람들의 공통점."],
+    startup:    ["MVP는 만들었는데, 그다음을 모르겠다면.","런웨이가 줄기 전에 {n}을 써보세요.","창업자 100명이 선택한 {n}의 이유."],
+    student:    ["스펙 쌓는 시간은 없고, 취업은 다가오고.","합격자들이 남몰래 쓰는 그것.","취준생 10명 중 7명이 모르는 {n} 활용법."],
+    mom:        ["육아하면서 내 시간 찾기, 불가능하지 않아요.","아이 낮잠 시간 20분으로 할 수 있는 것들.","{n}을 쓰는 엄마들의 하루가 달라졌습니다."],
+    "small-biz":["단골은 있는데 매출이 제자리인 이유.","월 1만원으로 직원 한 명 몫을 하는 {n}.","사장님 혼자 다 하는 시대는 끝났어요."],
+    creator:    ["팔로워보다 중요한 건 팔로워당 수익.","콘텐츠는 만들었는데 수익화가 안 된다면.","{n} 구독자들의 평균 월 수입이 궁금하세요?"],
+    expert:     ["전문 지식을 갖고 있지만 알리는 방법을 모른다면.","강의 한 번 만들고 매달 수익이 들어오는 구조.","{n}으로 전문성을 자산으로 만드세요."],
+  },
+  onetime: {
+    worker:     ["딱 한 번 결제하고, 평생 써먹는 {n}.","49,000원짜리 결정이 업무 방식을 바꿉니다.","지금 당장 필요한 것만 뽑아쓰세요. 구독 없이."],
+    freelancer: ["견적서 하나에 계약이 달렸다면, {n}.","클라이언트가 '이거 어디서 났어요?' 묻는 그 자료.","1회 구매, 반복 사용. 프리랜서의 필수 도구."],
+    startup:    ["IR 덱 하나가 투자를 바꿉니다.","한 번만 사도 창업 3년치 레슨이 담긴 {n}.","창업 초기에 꼭 알아야 할 것만 담았어요."],
+    student:    ["합격 후기보다 합격 방법이 필요하다면.","99,000원짜리 자료가 연봉 3,000만원을 바꿉니다.","한 번 사면 평생 쓰는 취업 전략서."],
+    mom:        ["사 놓고 안 보는 육아책 대신, 바로 쓰는 {n}.","한 번 결제로 육아 고민 3가지가 해결됩니다.","아이의 이 시기, 딱 이것만 알면 됩니다."],
+    "small-biz":["한 번 세팅하면 매달 쓰는 사장님의 필수 도구.","광고비 쓰기 전에 {n} 먼저 써보세요.","단골 고객 만드는 법, 49,000원에 배웁니다."],
+    creator:    ["콘텐츠 아이디어가 막힌 날을 위한 {n}.","1회 구매, 3개월 치 콘텐츠 소재 확보.","조회수 터지는 썸네일의 공식, 지금 뽑아가세요."],
+    expert:     ["강의 교안 10시간 대신 {n} 1시간.","컨설팅 단가 올리기 전에 이것부터.","전문가답게 보이는 문서 만드는 법."],
+  },
+  community: {
+    worker:     ["혼자 공부하다 포기한 사람들이 모인 곳.","같은 목표를 가진 사람들과 함께하면 완주율이 다릅니다.","{n} 멤버들의 평균 성과가 궁금하세요?"],
+    freelancer: ["프리랜서인데 가끔 외롭다면, {n}.","클라이언트 소개, 스킬 공유, 멘탈 관리까지.","혼자지만 혼자가 아닌 {n} 커뮤니티."],
+    startup:    ["창업자끼리만 아는 이야기가 있어요.","같은 고민을 가진 창업자들의 커뮤니티.","{n}에서 시작된 파트너십이 몇 개인지 아세요?"],
+    student:    ["스터디 구하는 시간에 {n} 들어오세요.","합격자와 함께 준비하는 유일한 커뮤니티.","혼자 하면 3개월, 같이 하면 6주."],
+    mom:        ["육아 고민, 나만 이런 거 아니었어요.","판단 없이 고민 털어놓는 {n} 커뮤니티.","같은 월령 아이 키우는 엄마들의 모임."],
+    "small-biz":["사장님들끼리만 나누는 노하우가 있어요.","매출 올린 사장님들의 공통점, {n}에 다 있어요.","업종은 달라도 고민은 같더라고요."],
+    creator:    ["팔로워 1만 넘긴 사람들이 모인 곳.","함께 성장하는 크리에이터 커뮤니티 {n}.","수익화 못 한 크리에이터에서 월 300만원까지."],
+    expert:     ["전문가들이 진짜 속내를 나누는 공간.","지식 판매 월 100만원 이상 멤버들의 모임.","{n}에서 시작한 컨설팅 계약이 몇 건인지 아세요?"],
+  },
+  marketplace: {
+    worker:     ["필요한 것만, 원하는 사람에게.","공급자와 수요자를 잇는 가장 빠른 방법.","{n}에서 거래된 누적 금액이 궁금하세요?"],
+    freelancer: ["클라이언트를 찾는 시간을 줄이세요.","포트폴리오보다 거래 후기가 설득력 있습니다.","{n}에 등록된 프리랜서 평균 월 수입."],
+    startup:    ["B2B 영업, 이제 인바운드로 전환하세요.","파트너사 찾는 데 3개월이 걸렸다면.","{n}에서 시작된 파트너십이 몇 개인지 아세요?"],
+    student:    ["재능을 거래하는 가장 빠른 방법.","첫 거래 후기가 생기는 순간, 모든 게 달라집니다.","알바 대신 {n}에서 포트폴리오 쌓으세요."],
+    mom:        ["집에서 할 수 있는 재능 거래 플랫폼.","만들기 좋아하는 재능을 수익으로.","{n}에서 핸드메이드 작가로 데뷔하세요."],
+    "small-biz":["동네 손님에서 전국 고객으로.","재고 없이 판매하는 디지털 상품 거래 방법.","오프라인 매장의 온라인 확장, {n}."],
+    creator:    ["콘텐츠를 팔 수 있는 가장 쉬운 방법.","구독자 없어도 {n}에서 수익화 가능합니다.","템플릿 하나로 월 50만원 버는 크리에이터들."],
+    expert:     ["지식을 상품으로 만드는 플랫폼.","컨설팅 의뢰가 들어오는 구조를 만드세요.","{n}에 프로필 올리고 첫 문의까지 평균 7일."],
+  },
+  saas: {
+    worker:     ["반복 업무는 {n}에게 맡기고, 당신은 중요한 일만.","팀 전체의 생산성을 올리는 단 하나의 툴.","월 {n}원으로 팀 효율 30% 올린 기업들."],
+    freelancer: ["견적, 계약, 정산까지 하나의 툴로.","3개 툴 쓰던 거 {n} 하나로 통합했어요.","혼자 운영하는 비즈니스에 딱 맞는 SaaS."],
+    startup:    ["스타트업이 Enterprise처럼 운영되는 방법.","성장할수록 더 강력해지는 {n}.","시드부터 Series A까지, {n}과 함께."],
+    student:    ["팀플이 쉬워지는 협업 툴 {n}.","졸업 전에 익혀두면 취업 후 써먹는 {n}.","교수님도 쓰는 그 툴, 무료로 시작하세요."],
+    mom:        ["복잡한 육아 일정, {n}이 정리해드립니다.","가족 모두가 쓸 수 있는 {n}.","아이 관련 정보를 한 곳에서 관리하세요."],
+    "small-biz":["사장님의 손을 덜어드리는 {n}.","POS부터 고객 관리까지 하나로.","직원 없이도 체계적으로 운영되는 매장의 비밀."],
+    creator:    ["콘텐츠 기획부터 발행까지 하나의 워크플로.","채널 3개를 동시에 관리하는 크리에이터들의 툴.","{n} 쓰고 나서 콘텐츠 제작 시간 반으로 줄었어요."],
+    expert:     ["수강생 관리, 강의 운영, 정산까지 한 번에.","강의 플랫폼보다 수수료가 낮은 {n}.","내 브랜드로 운영하는 나만의 강의 인프라."],
+  },
+  freemium: {
+    worker:     ["일단 무료로 써보세요. 유료로 갈 이유는 직접 느끼실 거예요.","무료 버전만 써도 충분히 달라집니다.","14일 무료 체험, 신용카드 없이 시작."],
+    freelancer: ["첫 달은 무료. 그다음은 선택.","무료로 시작해서, 성과 나면 업그레이드.","프리랜서 200명 중 160명이 유료로 전환한 이유."],
+    startup:    ["팀 5인까지 무료. 성장하면 그때 결제하세요.","초기엔 공짜, 스케일업할 때 투자하는 구조.","무료 플랜으로도 첫 100명의 고객을 만날 수 있어요."],
+    student:    ["학생은 무료. 취업 후에 결제하세요.","재학 중 무료 플랜으로 충분합니다.","교육용 계정, 이메일 인증 하나로 시작."],
+    mom:        ["첫 30일은 무료로 써보세요.","아이에게 맞는지 먼저 확인하고 결제하세요.","무료 체험 후 마음에 안 들면 그냥 끝내도 돼요."],
+    "small-biz":["매장 한 개는 무료. 여러 매장은 유료.","먼저 써보고 결정하세요. 카드 정보 불필요.","소규모 사장님은 무료 플랜으로도 충분합니다."],
+    creator:    ["팔로워 1000명 미만은 무료.","성장할수록 더 많은 기능이 필요해집니다.","무료로 시작하고, 수익화되면 업그레이드."],
+    expert:     ["강의 1개까지 무료 운영.","수강생 10명까지는 무료로 시작하세요.","플랫폼 수수료 없는 무료 티어로 먼저 검증하세요."],
+  },
+  content: {
+    worker:     ["퇴근 후 30분으로 만드는 부수입 구조.","직장 다니면서 N잡하는 사람들의 콘텐츠.","월급 외 수입 만들기, {n}에서 시작하세요."],
+    freelancer: ["내 노하우를 콘텐츠로 팔면 어떨까요?","클라이언트 없이도 수익이 들어오는 구조.","한 번 만든 콘텐츠가 매달 수익을 만듭니다."],
+    startup:    ["창업 과정을 콘텐츠로 만드는 사람들.","당신의 실패 경험도 누군가에겐 돈 주고 살 자료.","스타트업 인사이트를 필요로 하는 사람은 많습니다."],
+    student:    ["합격 후기를 수익으로 만드는 방법.","내가 겪은 것을 다른 사람은 돈 주고 삽니다.","취준 과정, 정리만 해도 팔립니다."],
+    mom:        ["육아 노하우를 콘텐츠로 만들어보셨나요?","내 아이에게 효과 있었던 것, 다른 엄마들도 원합니다.","육아 콘텐츠 하나로 월 50만원 버는 엄마들."],
+    "small-biz":["20년 장사 노하우를 콘텐츠로.","사장님의 경험이 다른 사장님의 교과서가 됩니다.","폐업 직전 살린 비법, 팔아보신 적 있나요?"],
+    creator:    ["팔로워를 고객으로 만드는 콘텐츠 상품.","무료 콘텐츠로 신뢰 쌓고, 유료로 수익 만들기.","구독자에게 팔 수 있는 것들, 생각보다 많아요."],
+    expert:     ["강의, 템플릿, PDF — 전문성을 여러 형태로 판매.","잠자는 동안에도 팔리는 지식 상품 만들기.","1회 강의보다 콘텐츠 상품이 레버리지가 높습니다."],
+  },
+  b2b: {
+    worker:     ["팀장님이 도입 결정하기 전에 먼저 써보세요.","기업 도입 전 개인 계정으로 검증하는 법.","부서 단위 도입 문의가 늘고 있는 {n}."],
+    freelancer: ["클라이언트에게 제안할 수 있는 솔루션.","에이전시 파트너 프로그램 운영 중입니다.","리셀러 마진 30%, 파트너 등록하세요."],
+    startup:    ["SMB부터 Enterprise까지 확장 가능한 구조.","영업팀 없이 인바운드 B2B 리드 만드는 법.","파일럿 → 확장 계약, 평균 전환 기간 6주."],
+    student:    ["B2B 영업 인턴을 위한 {n} 가이드.","기업 제안서에 쓸 수 있는 ROI 계산법.","B2B SaaS의 구조, {n}으로 배우세요."],
+    mom:        ["어린이집·유치원 원장님을 위한 솔루션.","교육 기관 단체 계약 문의 환영합니다.","학부모 커뮤니케이션을 자동화하는 {n}."],
+    "small-biz":["프랜차이즈 본사 도입 문의 환영.","가맹점 10개 이상은 기업 플랜으로.","공급업체와의 거래를 체계화하는 {n}."],
+    creator:    ["MCN, 에이전시 파트너십 문의 환영.","브랜드 콜라보 관리 자동화 솔루션.","크리에이터 10명 이상 소속사를 위한 플랜."],
+    expert:     ["교육 기관, 기업 연수 파트너 모집 중.","컨설팅펌 화이트라벨 계약 문의.","법인 계약 시 세금계산서 발행 가능합니다."],
+  },
+};
+
+const SECTIONS = {
+  productivity: [
+    {tag:"문제", copy:"하루에도 수십 번 반복되는 그 작업, 언제까지 직접 하실 건가요?", where:"랜딩 문제 섹션 / 블로그 도입"},
+    {tag:"해결", copy:"{n}은 반복 작업을 자동화해서 당신이 진짜 중요한 일에 집중할 수 있게 합니다.", where:"랜딩 해결 섹션"},
+    {tag:"증거", copy:"실제 사용자 89%가 '업무 시간이 눈에 띄게 줄었다'고 응답했어요.", where:"랜딩 소셜프루프 섹션"},
+    {tag:"기능", copy:"워크플로 자동화 / 반복 알림 제거 / 리포트 자동 생성", where:"랜딩 기능 섹션 / 포스터"},
+    {tag:"CTA 문구", copy:"지금 바로 무료로 시작하고, 내일부터 달라지는 하루를 경험하세요.", where:"랜딩 CTA 섹션"},
+  ],
+  education: [
+    {tag:"문제", copy:"배우고 싶은 건 많은데, 어디서부터 시작해야 할지 모르겠다면.", where:"랜딩 문제 섹션 / 블로그 도입"},
+    {tag:"해결", copy:"{n}은 목표와 수준에 맞는 커리큘럼을 자동으로 설계해드립니다.", where:"랜딩 해결 섹션"},
+    {tag:"증거", copy:"수강생 93%가 목표한 기간 안에 첫 결과물을 완성했어요.", where:"랜딩 소셜프루프 섹션"},
+    {tag:"기능", copy:"수준별 맞춤 커리큘럼 / 진도율 트래킹 / 튜터 Q&A 연결", where:"랜딩 기능 섹션 / 포스터"},
+    {tag:"CTA 문구", copy:"오늘 등록하면 첫 달 50% 할인 + 1:1 목표 설계 세션 제공.", where:"랜딩 CTA 섹션"},
+  ],
+  finance: [
+    {tag:"문제", copy:"재테크 정보는 넘쳐나는데, 내 상황에 맞는 답을 찾기가 어렵습니다.", where:"랜딩 문제 섹션 / 블로그 도입"},
+    {tag:"해결", copy:"{n}은 내 수입·지출·목표를 기반으로 최적화된 재테크 플랜을 제안합니다.", where:"랜딩 해결 섹션"},
+    {tag:"증거", copy:"{n} 사용자의 평균 월 저축액이 가입 전 대비 37% 증가했어요.", where:"랜딩 소셜프루프 섹션"},
+    {tag:"기능", copy:"자산 현황 한눈에 / 목표 달성 시뮬레이션 / 소비 패턴 분석", where:"랜딩 기능 섹션 / 포스터"},
+    {tag:"CTA 문구", copy:"지금 내 재무 현황을 무료로 진단받아보세요.", where:"랜딩 CTA 섹션"},
+  ],
+  health: [
+    {tag:"문제", copy:"운동을 시작하는 건 쉬운데, 꾸준히 하는 게 어렵습니다.", where:"랜딩 문제 섹션 / 블로그 도입"},
+    {tag:"해결", copy:"{n}은 내 체력과 목표에 맞는 루틴을 설계하고, 매일 동기를 유지하게 도와줍니다.", where:"랜딩 해결 섹션"},
+    {tag:"증거", copy:"3개월 이상 사용자의 72%가 목표 체중 혹은 체력 향상을 달성했어요.", where:"랜딩 소셜프루프 섹션"},
+    {tag:"기능", copy:"맞춤 운동 루틴 / 식단 트래킹 / 진척도 시각화", where:"랜딩 기능 섹션 / 포스터"},
+    {tag:"CTA 문구", copy:"오늘이 시작하기 가장 좋은 날입니다. 첫 루틴 무료로 받아가세요.", where:"랜딩 CTA 섹션"},
+  ],
+  marketing: [
+    {tag:"문제", copy:"콘텐츠는 만드는데, 알고리즘이 안 태워준다면.", where:"랜딩 문제 섹션 / 블로그 도입"},
+    {tag:"해결", copy:"{n}은 플랫폼별 최적화된 카피와 콘텐츠 전략을 제안합니다.", where:"랜딩 해결 섹션"},
+    {tag:"증거", copy:"{n} 사용 후 평균 팔로워 성장률이 2.3배 증가했어요.", where:"랜딩 소셜프루프 섹션"},
+    {tag:"기능", copy:"플랫폼별 카피 최적화 / 콘텐츠 캘린더 / 성과 분석", where:"랜딩 기능 섹션 / 포스터"},
+    {tag:"CTA 문구", copy:"내 콘텐츠의 전환율을 무료로 진단받아보세요.", where:"랜딩 CTA 섹션"},
+  ],
+  hr: [
+    {tag:"문제", copy:"채용 공고 올려도 적합한 사람이 안 온다면.", where:"랜딩 문제 섹션 / 블로그 도입"},
+    {tag:"해결", copy:"{n}은 직무에 맞는 인재를 정확하게 매칭하고, 채용 프로세스를 자동화합니다.", where:"랜딩 해결 섹션"},
+    {tag:"증거", copy:"{n} 사용 기업의 채용 완료 소요 기간이 평균 40% 단축됐어요.", where:"랜딩 소셜프루프 섹션"},
+    {tag:"기능", copy:"AI 이력서 스크리닝 / 인터뷰 일정 자동화 / 입사 온보딩 키트", where:"랜딩 기능 섹션 / 포스터"},
+    {tag:"CTA 문구", copy:"지금 무료로 공고 올리고, 첫 매칭 결과를 확인해보세요.", where:"랜딩 CTA 섹션"},
+  ],
+  "community-cat": [
+    {tag:"문제", copy:"혼자 하면 포기하게 됩니다. 같이 해야 끝까지 갑니다.", where:"랜딩 문제 섹션 / 블로그 도입"},
+    {tag:"해결", copy:"{n}은 같은 목표를 가진 사람들을 연결하고, 함께 성장하는 구조를 만듭니다.", where:"랜딩 해결 섹션"},
+    {tag:"증거", copy:"{n} 멤버의 목표 달성률이 혼자 했을 때보다 3.2배 높아요.", where:"랜딩 소셜프루프 섹션"},
+    {tag:"기능", copy:"목표별 팀 매칭 / 주간 미션 시스템 / 멘토 연결", where:"랜딩 기능 섹션 / 포스터"},
+    {tag:"CTA 문구", copy:"지금 가입하면 첫 달 무료. 같이 시작할 팀이 기다리고 있어요.", where:"랜딩 CTA 섹션"},
+  ],
+  commerce: [
+    {tag:"문제", copy:"좋은 상품은 있는데, 팔리지 않는다면.", where:"랜딩 문제 섹션 / 블로그 도입"},
+    {tag:"해결", copy:"{n}은 상품 발견부터 구매 전환까지 전 과정을 최적화합니다.", where:"랜딩 해결 섹션"},
+    {tag:"증거", copy:"{n} 입점 셀러의 평균 월 매출이 입점 전 대비 68% 증가했어요.", where:"랜딩 소셜프루프 섹션"},
+    {tag:"기능", copy:"AI 상품 추천 / 장바구니 이탈 방지 / 리뷰 자동 수집", where:"랜딩 기능 섹션 / 포스터"},
+    {tag:"CTA 문구", copy:"지금 무료로 입점하고, 첫 달 수수료 0%로 시작하세요.", where:"랜딩 CTA 섹션"},
+  ],
+};
+
+const POINT_COPIES = {
+  price:           { text: "경쟁사 대비 절반 가격으로, 두 배의 결과를.", sub: "합리적인 가격이 곧 경쟁력입니다." },
+  speed:           { text: "시작한 지 24시간 안에 첫 결과를 확인하세요.", sub: "빠른 실행이 빠른 성과를 만듭니다." },
+  easy:            { text: "코딩도, 디자인도 필요 없어요. 클릭 몇 번이면 됩니다.", sub: "누구나 쉽게, 바로 시작할 수 있어요." },
+  result:          { text: "사용자 1,000명이 검증한 결과. 숫자가 증명합니다.", sub: "평균 {n} 사용자의 성과 달성률 87%." },
+  "community-point":{ text: "혼자가 아니에요. 같은 목표를 가진 사람들이 기다립니다.", sub: "함께할수록 완주율이 달라집니다." },
+  exclusive:       { text: "이번 달까지만 열려 있는 기회입니다.", sub: "선착순 마감 후 재오픈 일정 미정." },
+  safe:            { text: "14일 내 환불 보장. 만족 못 하시면 100% 돌려드립니다.", sub: "리스크 없이 시작하세요." },
+  custom:          { text: "내 상황에 딱 맞게. 모두를 위한 서비스가 아닙니다.", sub: "당신의 목표와 수준에 맞게 설계됩니다." },
+  time:            { text: "하루 20분 투자로 한 달을 바꾸세요.", sub: "시간이 없다는 말이 더 이상 핑계가 되지 않도록." },
+  free:            { text: "오늘 가입하면 첫 달 완전 무료. 카드 정보도 필요 없어요.", sub: "무료로 시작하고, 가치를 느끼면 그때 결정하세요." },
+};
+
+const CTAS = {
+  subscription: [
+    {text:"지금 무료로 시작하기 →", where:"랜딩 메인 CTA"},
+    {text:"14일 무료 체험하기", where:"팝업 / 광고"},
+    {text:"월 9,900원으로 시작하기", where:"가격표 하단"},
+    {text:"구독 플랜 보러가기", where:"SNS 바이오 링크"},
+  ],
+  onetime: [
+    {text:"지금 바로 구매하기 →", where:"랜딩 메인 CTA"},
+    {text:"한 번만 결제하고 평생 소장", where:"가격표 하단"},
+    {text:"미리보기 먼저 보기", where:"광고 / SNS"},
+    {text:"지금 구매하면 30% 할인", where:"팝업 / 배너"},
+  ],
+  community: [
+    {text:"커뮤니티 입장하기 →", where:"랜딩 메인 CTA"},
+    {text:"이번 기수 마감 전 신청", where:"팝업 / 광고"},
+    {text:"무료로 둘러보기", where:"SNS 바이오 링크"},
+    {text:"지금 멤버 신청하기", where:"포스터 하단"},
+  ],
+  marketplace: [
+    {text:"지금 바로 등록하기 →", where:"랜딩 메인 CTA"},
+    {text:"무료로 시작하기", where:"팝업 / 광고"},
+    {text:"셀러로 시작하기", where:"포스터 하단"},
+    {text:"구매자로 둘러보기", where:"SNS 바이오 링크"},
+  ],
+  saas: [
+    {text:"무료로 시작하기 →", where:"랜딩 메인 CTA"},
+    {text:"데모 신청하기", where:"B2B 광고 / 이메일"},
+    {text:"팀 플랜 보기", where:"가격표 하단"},
+    {text:"영업팀 문의하기", where:"Enterprise 섹션"},
+  ],
+  freemium: [
+    {text:"무료로 시작하기 →", where:"랜딩 메인 CTA"},
+    {text:"신용카드 없이 시작", where:"팝업 / 광고"},
+    {text:"지금 가입하기", where:"SNS 바이오 링크"},
+    {text:"무료 플랜 살펴보기", where:"가격표 옆"},
+  ],
+  content: [
+    {text:"지금 구매하기 →", where:"랜딩 메인 CTA"},
+    {text:"미리보기 보러가기", where:"광고 / SNS"},
+    {text:"수강 신청하기", where:"포스터 하단"},
+    {text:"할인가에 받아가기", where:"팝업 / 배너"},
+  ],
+  b2b: [
+    {text:"데모 신청하기 →", where:"랜딩 메인 CTA"},
+    {text:"도입 문의하기", where:"B2B 광고 / 이메일"},
+    {text:"무료 파일럿 신청", where:"포스터 하단"},
+    {text:"기업 플랜 알아보기", where:"가격표 하단"},
+  ],
+};
+
+const SNS_TEMPLATES = {
+  worker:     ["직장인 {n}% 가 모르는 사실.\n\n{desc}\n\n[저도 처음엔 몰랐어요]\n→ 아래 링크에서 무료로 시작해보세요.", "퇴근 후에 이걸 하는 직장인들이 다릅니다.\n\n{desc}\n\n관심 있으시면 링크 클릭 👇"],
+  freelancer: ["프리랜서로 살면서 가장 잘한 결정 3가지 중 하나.\n\n{desc}\n\n링크 프로필에 있어요 🔗", "혼자 다 하는 프리랜서를 위해 만들었어요.\n\n{desc}\n\n첫 달 무료 → 링크 바이오에서"],
+  startup:    ["창업 3개월 차에 알았다면 좋았을 것들.\n\n{desc}\n\n지금 무료로 써볼 수 있어요 👇", "MVP 만들고 나서 막막했던 분들에게.\n\n{desc}\n\n링크 프로필에서 확인하세요."],
+  student:    ["취준생 때 이걸 알았다면 6개월은 빨랐을 것 같아요.\n\n{desc}\n\n지금 무료로 시작해보세요 👇", "대학교 4학년 때 찾던 그거.\n\n{desc}\n\n학생 무료 플랜 링크 바이오에 있어요."],
+  mom:        ["육아하면서 나를 잃지 않는 방법.\n\n{desc}\n\n비슷한 고민 있으신 분들, 링크 클릭해보세요 👇", "아이 재우고 나서 저도 이걸 씁니다.\n\n{desc}\n\n첫 달 무료예요 🔗"],
+  "small-biz":["장사 10년 하면서 배운 것들을 넣었어요.\n\n{desc}\n\n사장님들 무료로 써보세요 👇", "매출이 안 오를 때 먼저 이거 확인하세요.\n\n{desc}\n\n링크 바이오에서 무료 시작."],
+  creator:    ["구독자 0명에서 시작한 저도 했어요.\n\n{desc}\n\n같이 시작해볼 분 링크 클릭 👇", "수익화가 안 되는 크리에이터 분들에게.\n\n{desc}\n\n무료로 먼저 확인해보세요 🔗"],
+  expert:     ["강의 3년 하면서 깨달은 것.\n\n{desc}\n\n전문가분들 한 번 써보세요 👇", "지식을 돈으로 바꾸는 가장 빠른 방법.\n\n{desc}\n\n링크 프로필에서 무료로 시작."],
+};
+
+const BLOG_INTROS = {
+  productivity: "당신은 하루에 몇 가지 반복 작업을 하고 있나요? 이메일 정리, 보고서 초안, 일정 조율... 대부분의 직장인은 하루 업무 시간의 40% 이상을 반복 작업에 씁니다. {n}은 바로 이 문제를 해결하기 위해 만들어졌어요. 이 글에서는 {n}을 어떻게 활용해서 하루 2시간을 되찾을 수 있는지 알려드릴게요.",
+  education:    "뭔가를 배우고 싶다는 생각은 있는데, 어디서부터 시작해야 할지 막막했던 적 있으신가요? 유튜브를 보다가 관련 영상에 빠져들고, 결국 아무것도 못 배운 채 시간만 보낸 경험이요. {n}은 바로 그 '시작의 막막함'을 없애기 위해 만들어졌습니다. 오늘은 {n}으로 처음 시작하는 방법을 소개할게요.",
+  finance:      "재테크 콘텐츠는 넘쳐나는데, 막상 내 상황에 적용하려면 어떻게 해야 할지 모르겠다는 분들이 많습니다. 월급은 그대로인데 물가만 오르는 요즘, 더 이상 '나중에 해야지'는 없어요. {n}으로 오늘 당장 내 재무 상태를 진단하고 첫 발걸음을 내딛는 방법을 알려드릴게요.",
+  health:       "운동을 시작하는 건 어렵지 않아요. 문제는 꾸준히 하는 겁니다. 헬스장 등록하고 한 달도 안 돼서 안 간 경험, 다들 한 번쯤 있으시죠? {n}은 의지력에 의존하지 않고 루틴을 만드는 방법으로 접근합니다. 오늘부터 3개월, {n}과 함께하면 어떻게 달라지는지 소개해드릴게요.",
+  marketing:    "콘텐츠를 열심히 만드는데 왜 반응이 없을까요? 대부분의 경우, 문제는 콘텐츠 퀄리티가 아니라 '카피'입니다. 사람들이 멈추고 클릭하게 만드는 첫 줄이 없는 거예요. {n}으로 플랫폼별 전환율 높은 카피를 만드는 방법을 오늘 공개합니다.",
+  hr:           "좋은 사람 뽑는 게 이렇게 힘들 줄 몰랐어요. 채용 공고를 올려도 지원자가 없거나, 있어도 적합하지 않은 케이스. 많은 스타트업과 소상공인이 겪는 현실입니다. {n}이 어떻게 이 문제를 해결했는지 실제 사례와 함께 소개할게요.",
+  "community-cat":"혼자서 목표를 달성하는 게 생각보다 훨씬 어렵다는 걸 알고 계신가요? 연구에 따르면 같은 목표를 가진 그룹과 함께할 때 달성률이 3배 이상 높아진다고 합니다. {n}이 왜 단순한 앱이 아니라 커뮤니티로 설계됐는지, 그 이유를 설명해드릴게요.",
+  commerce:     "온라인 쇼핑몰을 운영하면서 가장 힘든 게 뭔지 아세요? 상품을 만드는 것도, 사진 찍는 것도 아니에요. '사람들이 보게 만드는 것'입니다. {n}은 노출부터 구매 전환까지 전 과정을 최적화합니다. 어떻게 작동하는지 오늘 다 알려드릴게요.",
+};
+
+// ─────────────────────────────────────────────
+// STATE
+// ─────────────────────────────────────────────
+let sel = { bm: null, target: null, cat: null };
+let selPoints = new Set();
+
+// ─────────────────────────────────────────────
+// SETUP
+// ─────────────────────────────────────────────
+function setupSingle(containerId, key) {
+  document.querySelectorAll(`#${containerId} .opt`).forEach(el => {
+    el.addEventListener('click', () => {
+      document.querySelectorAll(`#${containerId} .opt`).forEach(o => o.classList.remove('selected'));
+      el.classList.add('selected');
+      sel[key] = el.dataset.val;
+      checkReady();
+    });
+  });
+}
+setupSingle('bm-opts', 'bm');
+setupSingle('target-opts', 'target');
+setupSingle('cat-opts', 'cat');
+
+document.querySelectorAll('#point-opts .opt').forEach(el => {
+  el.addEventListener('click', () => {
+    const v = el.dataset.val;
+    if (selPoints.has(v)) { selPoints.delete(v); el.classList.remove('selected'); }
+    else { selPoints.add(v); el.classList.add('selected'); }
+    checkReady();
+  });
+});
+
+function checkReady() {
+  document.getElementById('gen-btn').disabled = !(sel.bm && sel.target && sel.cat);
+}
+
+// ─────────────────────────────────────────────
+// GENERATE
+// ─────────────────────────────────────────────
+document.getElementById('gen-btn').addEventListener('click', generate);
+
+function generate() {
+  const name = document.getElementById('service-name').value.trim() || '내 서비스';
+  const desc = document.getElementById('service-desc').value.trim() || name + '을 소개합니다.';
+  const r = t => t.replace(/\{n\}/g, name).replace(/\{desc\}/g, desc);
+
+  // HOOKS
+  const hookArr = (HOOKS[sel.bm]?.[sel.target] || HOOKS.subscription.worker).map(r);
+  document.getElementById('hooks-output').innerHTML = hookArr.map((h,i) =>
+    `<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;${i<hookArr.length-1?'margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid var(--border)':''}">
+      <div class="copy-text hook-text">"${h}"</div>
+      <button class="copy-btn" onclick="copyText('${h.replace(/'/g,"\\'")}',this)">복사</button>
+    </div>`
+  ).join('');
+
+  // SECTIONS
+  const secArr = (SECTIONS[sel.cat] || SECTIONS.productivity).map(s => ({...s, copy: r(s.copy)}));
+  document.getElementById('sections-output').innerHTML = secArr.map(s =>
+    `<li>
+      <span class="section-tag">${s.tag}</span>
+      <div style="flex:1">
+        <div class="section-copy">${s.copy}</div>
+        <div class="section-where">📌 ${s.where}</div>
+      </div>
+      <button class="copy-btn" style="flex-shrink:0" onclick="copyText('${s.copy.replace(/'/g,"\\'")}',this)">복사</button>
+    </li>`
+  ).join('');
+
+  // POINTS
+  const pts = selPoints.size > 0 ? [...selPoints] : ['easy','result'];
+  document.getElementById('points-output').innerHTML = pts.map(p => {
+    const d = POINT_COPIES[p]; if(!d) return '';
+    return `<div style="margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid var(--border)">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;">
+        <div>
+          <div class="copy-text" style="font-weight:700;margin-bottom:4px">${r(d.text)}</div>
+          <div class="copy-text small">${r(d.sub)}</div>
+        </div>
+        <button class="copy-btn" onclick="copyText('${r(d.text).replace(/'/g,"\\'")}',this)">복사</button>
+      </div>
+    </div>`;
+  }).join('').replace(/border-bottom[^}]+}\s*$/, '');
+
+  // SNS
+  const snsTmpl = (SNS_TEMPLATES[sel.target] || SNS_TEMPLATES.worker);
+  document.getElementById('sns-output').innerHTML = snsTmpl.map((t,i) =>
+    `<div style="${i===0?'margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--border)':''}">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
+        <div class="copy-text" style="white-space:pre-line;font-size:14px">${r(t)}</div>
+        <button class="copy-btn" onclick="copyText(\`${r(t).replace(/`/g,'\\`')}\`,this)">복사</button>
+      </div>
+    </div>`
+  ).join('');
+
+  // BLOG
+  const blogText = r(BLOG_INTROS[sel.cat] || BLOG_INTROS.productivity);
+  document.getElementById('blog-output').innerHTML =
+    `<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
+      <div class="copy-text" style="font-size:14px;line-height:1.8">${blogText}</div>
+      <button class="copy-btn" onclick="copyText('${blogText.replace(/'/g,"\\'")}',this)">복사</button>
+    </div>`;
+
+  // CTA
+  const ctaArr = CTAS[sel.bm] || CTAS.subscription;
+  document.getElementById('cta-output').innerHTML = ctaArr.map(c =>
+    `<div class="cta-item">
+      <div>
+        <div class="cta-item-text">${c.text}</div>
+        <div class="cta-item-where">📌 ${c.where}</div>
+      </div>
+      <button class="copy-btn" onclick="copyText('${c.text.replace(/'/g,"\\'")}',this)">복사</button>
+    </div>`
+  ).join('');
+
+  document.getElementById('result-sec').classList.add('visible');
+  document.getElementById('result-sec').scrollIntoView({behavior:'smooth', block:'start'});
+}
+
+// ─────────────────────────────────────────────
+// USAGE TABS FILTER
+// ─────────────────────────────────────────────
+document.querySelectorAll('.usage-tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.usage-tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    const filter = tab.dataset.filter;
+    document.querySelectorAll('.copy-card[data-usage]').forEach(card => {
+      if (filter === 'all') {
+        card.style.display = 'block';
+      } else {
+        const usages = card.dataset.usage.split(' ');
+        card.style.display = usages.includes(filter) ? 'block' : 'none';
+      }
+    });
+  });
+});
+
+// ─────────────────────────────────────────────
+// COPY HELPERS
+// ─────────────────────────────────────────────
+function copyText(text, btn) {
+  navigator.clipboard.writeText(text).then(() => {
+    if (btn) { btn.textContent = '✓'; btn.classList.add('copied'); setTimeout(() => { btn.textContent = '복사'; btn.classList.remove('copied'); }, 1500); }
+    showToast();
+  });
+}
+
+document.getElementById('copy-all-btn').addEventListener('click', () => {
+  const name = document.getElementById('service-name').value.trim() || '내 서비스';
+  const hooks = [...document.querySelectorAll('#hooks-output .hook-text')].map(e => e.textContent);
+  const secs  = [...document.querySelectorAll('#sections-output .section-copy')].map(e => e.textContent);
+  const pts   = [...document.querySelectorAll('#points-output [style*="font-weight:700"]')].map(e => e.textContent);
+  const ctas  = [...document.querySelectorAll('#cta-output .cta-item-text')].map(e => e.textContent);
+  const text = [
+    `📋 ${name} 카피 자판기 결과\n`,
+    `🎯 후킹 문구\n${hooks.map((h,i)=>`${i+1}. ${h}`).join('\n')}`,
+    `\n📄 랜딩페이지 섹션\n${secs.join('\n')}`,
+    `\n✨ 강조 포인트\n${pts.join('\n')}`,
+    `\n🔴 CTA 문구\n${ctas.map((c,i)=>`${i+1}. ${c}`).join('\n')}`,
+  ].join('\n');
+  navigator.clipboard.writeText(text).then(() => showToast('전체 카피가 복사됐어요!'));
+});
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg || '복사됐어요!';
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2000);
+}
+
+document.getElementById('reset-btn').addEventListener('click', () => {
+  sel = {bm:null, target:null, cat:null};
+  selPoints.clear();
+  document.querySelectorAll('.opt').forEach(o => o.classList.remove('selected'));
+  document.getElementById('service-name').value = '';
+  document.getElementById('service-desc').value = '';
+  document.getElementById('gen-btn').disabled = true;
+  document.getElementById('result-sec').classList.remove('visible');
+  document.querySelectorAll('.copy-card[data-usage]').forEach(c => c.style.display = 'block');
+  document.querySelectorAll('.usage-tab').forEach(t => t.classList.remove('active'));
+  document.querySelector('.usage-tab[data-filter="all"]').classList.add('active');
+  window.scrollTo({top:0, behavior:'smooth'});
+});
+</script>
+</body>
+</html>
